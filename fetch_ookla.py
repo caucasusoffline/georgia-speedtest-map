@@ -18,7 +18,12 @@ def get_georgia_polygon():
     if not os.path.exists(LOCAL_BND_FILE):
         raise FileNotFoundError(f"ვერ ვიპოვე ფაილი: {LOCAL_BND_FILE}. გთხოვთ, ატვირთოთ რეპოზიტორიუმში.")
         
-    gdf_boundary = gpd.read_file(LOCAL_BND_FILE)
+    # engine="fiona" ავტომატურად უმკლავდება "ღია კონტურების" (unclosed ring) პრობლემას
+    gdf_boundary = gpd.read_file(LOCAL_BND_FILE, engine="fiona")
+    
+    # make_valid() ასწორებს გეომეტრიულ დეფექტებს (მაგ. გადაჯვარედინებულ ხაზებს)
+    gdf_boundary['geometry'] = gdf_boundary['geometry'].make_valid()
+    
     return gdf_boundary.dissolve()
 
 def get_target_urls(network_type, target_year=None, target_quarter=None):

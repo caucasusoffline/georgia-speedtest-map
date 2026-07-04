@@ -1,1 +1,9 @@
-{"mobile": [], "fixed": []}
+{
+  "mobile": [
+    "georgia_mobile_2025_Q1.geojson"
+  ],
+  "fixed": [
+    "georgia_fixed_2025_Q1.geojson"
+  ],
+  "generated_at": "2026-07-04T17:58:22.660203Z"
+}

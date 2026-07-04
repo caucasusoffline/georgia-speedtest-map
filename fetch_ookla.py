@@ -9,31 +9,16 @@ from datetime import datetime
 
 os.makedirs("data", exist_ok=True)
 MIN_LON, MIN_LAT, MAX_LON, MAX_LAT = 40.0, 41.0, 46.8, 43.6
-GEORGIA_BND_URL = "https://caucasusoffline.com/test1000/js/municipality-shapes-converted.geojson"
+
+# ახლა უკვე ლოკალურ ფაილს ვიყენებთ
+LOCAL_BND_FILE = "municipality.geojson"
 
 def get_georgia_polygon():
-    print("ვტვირთავთ საქართველოს საზღვრებს (ბრაუზერის სიმულაციით)...")
-    # სერვერის ბლოკირების (403 Forbidden) ასარიდებლად ვამატებთ User-Agent-ს
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    # 1. ფაილს ვიწერთ requests-ით, როგორც ჩვეულებრივი მომხმარებელი
-    response = requests.get(GEORGIA_BND_URL, headers=headers)
-    response.raise_for_status() # შეცდომის შემოწმება
-    
-    # 2. ვინახავთ დროებით ლოკალურ ფაილად
-    temp_file = "data/temp_boundary.geojson"
-    with open(temp_file, "w", encoding="utf-8") as f:
-        f.write(response.text)
+    print("ვტვირთავთ საქართველოს საზღვრებს (ლოკალური ფაილიდან)...")
+    if not os.path.exists(LOCAL_BND_FILE):
+        raise FileNotFoundError(f"ვერ ვიპოვე ფაილი: {LOCAL_BND_FILE}. გთხოვთ, ატვირთოთ რეპოზიტორიუმში.")
         
-    # 3. GeoPandas კითხულობს ლოკალური ფაილიდან უპრობლემოდ
-    gdf_boundary = gpd.read_file(temp_file)
-    
-    # 4. ვშლით დროებით ფაილს, რომ რეპოზიტორიუმში ზედმეტი არ აიტვირთოს
-    if os.path.exists(temp_file):
-        os.remove(temp_file)
-        
+    gdf_boundary = gpd.read_file(LOCAL_BND_FILE)
     return gdf_boundary.dissolve()
 
 def get_target_urls(network_type, target_year=None, target_quarter=None):
@@ -132,6 +117,7 @@ def main():
     parser.add_argument("--quarter", type=int, help="კვარტალი")
     args = parser.parse_args()
 
+    # ლოკალური ფაილის წაკითხვა
     georgia_boundary = get_georgia_polygon()
     
     process_network("mobile", georgia_boundary, args.year, args.quarter)

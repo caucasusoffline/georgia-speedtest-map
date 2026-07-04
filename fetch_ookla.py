@@ -10,7 +10,7 @@ from datetime import datetime
 os.makedirs("data", exist_ok=True)
 MIN_LON, MIN_LAT, MAX_LON, MAX_LAT = 40.0, 41.0, 46.8, 43.6
 
-LOCAL_BND_FILE = "municipality-shapes-converted.geojson"
+LOCAL_BND_FILE = "municipality.geojson"
 
 def get_georgia_polygon():
     print("ვტვირთავთ საქართველოს საზღვრებს (ლოკალური ფაილიდან)...")

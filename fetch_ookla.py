@@ -16,19 +16,23 @@ def get_latest_ookla_url(network_type="mobile"):
         (1, "-01-01")
     ]
     
-    # ვამოწმებთ ბოლო რამდენიმე წლის მონაცემებს
     for year in range(current_year, current_year - 5, -1):
         for q_num, date_suffix in quarters:
             date_str = f"{year}{date_suffix}"
-            # აქ შეიცვალა shapefiles -> parquet
-            url = f"https://ookla-open-data.s3.amazonaws.com/parquet/performance/type={network_type}/year={year}/quarter={q_num}/{date_str}_performance_{network_type}_tiles.parquet"
+            
+            # 1. ვამოწმებთ HTTPS ლინკით (რადგან Web მოთხოვნებისთვის ეს უფრო მარტივია)
+            check_url = f"https://ookla-open-data.s3.amazonaws.com/parquet/performance/type={network_type}/year={year}/quarter={q_num}/{date_str}_performance_{network_type}_tiles.parquet"
+            
+            # 2. PyArrow-სთვის ვამზადებთ S3 ლინკს
+            s3_url = f"s3://ookla-open-data/parquet/performance/type={network_type}/year={year}/quarter={q_num}/{date_str}_performance_{network_type}_tiles.parquet"
             
             try:
-                response = requests.get(url, stream=True, timeout=10)
+                response = requests.get(check_url, stream=True, timeout=10)
                 if response.status_code == 200:
                     print(f"✅ მოიძებნა უახლესი მონაცემები: {year} წლის კვარტალი {q_num} ({network_type})")
                     response.close()
-                    return url
+                    # ვაბრუნებთ S3 ლინკს!
+                    return s3_url
             except requests.RequestException:
                 continue
                 
@@ -41,7 +45,9 @@ def main():
     print(f"ლინკი: {url}")
     
     print("მიმდინარეობს საქართველოს მონაცემების ამოჭრა... (ამას შეიძლება 1-2 წუთი დასჭირდეს)")
-    gdf = gpd.read_parquet(url, bbox=GEORGIA_BBOX)
+    
+    # აქ დავამატეთ storage_options={"anon": True} - ანონიმურად, პაროლის გარეშე შესასვლელად
+    gdf = gpd.read_parquet(url, bbox=GEORGIA_BBOX, storage_options={"anon": True})
     
     records_count = len(gdf)
     print(f"📊 ნაპოვნია {records_count} ლოკაცია საქართველოს ტერიტორიაზე.")

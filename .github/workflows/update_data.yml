@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 0 1 */3 *' 
   workflow_dispatch: 
+    inputs:
+      year:
+        description: 'წელი (მაგ. 2022). ცარიელი - უახლესი მონაცემებისთვის'
+        required: false
+        type: string
+      quarter:
+        description: 'კვარტალი (1, 2, 3 ან 4). ცარიელი - უახლესი მონაცემებისთვის'
+        required: false
+        type: string
 
 permissions:
   contents: write 
@@ -18,10 +27,14 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        # აქ დაემატა s3fs და fsspec
-        run: pip install geopandas pyarrow requests s3fs fsspec
+        run: pip install geopandas pyarrow requests
       - name: Run script
-        run: python fetch_ookla.py
+        run: |
+          if [ -n "${{ github.event.inputs.year }}" ] && [ -n "${{ github.event.inputs.quarter }}" ]; then
+            python fetch_ookla.py --year ${{ github.event.inputs.year }} --quarter ${{ github.event.inputs.quarter }}
+          else
+            python fetch_ookla.py
+          fi
       - name: Commit and Push
         run: |
           git config --global user.name 'GitHub Action'

@@ -1,0 +1,25 @@
+name: Update Ookla Data
+on:
+  schedule:
+    - cron: '0 0 1 */3 *' # გაეშვება ყოველ 3 თვეში ერთხელ
+  workflow_dispatch: # ხელით გაშვების ღილაკიც რომ გქონდეს
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install geopandas pyarrow requests
+      - name: Run script
+        run: python fetch_ookla.py
+      - name: Commit and Push
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add data/
+          git commit -m "Auto-update Georgia Ookla data" || exit 0
+          git push

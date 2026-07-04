@@ -1,2 +1,437 @@
 # georgia-speedtest-map
 georgia speedtest map
+
+
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ookla - ინტერნეტის სიჩქარის ევოლუცია</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="anonymous" />
+    <style>
+        :root {
+            --panel-bg: #1c1f26;
+            --panel-border: #2e3340;
+            --text-primary: #eef1f6;
+            --text-muted: #9aa3b2;
+            --accent: #4fb0ff;
+            --error: #ff6b6b;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+            background: #0b0d11;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            background: #0b0d11;
+        }
+
+        .controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 1000;
+            background: var(--panel-bg);
+            color: var(--text-primary);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            width: 240px;
+            font-size: 14px;
+        }
+
+        .controls h3 {
+            margin: 0 0 12px 0;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .controls label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 10px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        select {
+            padding: 8px;
+            width: 100%;
+            font-size: 14px;
+            background: #12151b;
+            color: var(--text-primary);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+        }
+
+        select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        .status.loading { color: var(--accent); }
+        .status.error { color: var(--error); }
+
+        .legend {
+            position: absolute;
+            bottom: 24px;
+            left: 16px;
+            z-index: 1000;
+            background: var(--panel-bg);
+            color: var(--text-primary);
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            font-size: 12px;
+        }
+
+        .legend-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .legend-swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: var(--panel-bg);
+            color: var(--text-primary);
+            border-radius: 8px;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--panel-bg);
+        }
+
+        .popup-title {
+            margin: 0 0 8px 0;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .popup-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 480px) {
+            .controls { width: calc(100vw - 32px); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="controls">
+    <h3>მონაცემების ფილტრი</h3>
+
+    <label for="networkType">ქსელის ტიპი</label>
+    <select id="networkType">
+        <option value="mobile">📱 მობილური ინტერნეტი</option>
+        <option value="fixed">🏠 ფიქსირებული (სახლის)</option>
+    </select>
+
+    <label for="periodSelect">პერიოდი</label>
+    <select id="periodSelect" disabled>
+        <option value="">იტვირთება...</option>
+    </select>
+
+    <div id="status" class="status"></div>
+</div>
+
+<div class="legend">
+    <div class="legend-title">ჩამოტვირთვის სიჩქარე (Mbps)</div>
+    <div id="legendRows"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin="anonymous"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    // --------------------------------------------------------------- //
+    // მდგომარეობა
+    // --------------------------------------------------------------- //
+    var metadata = null;
+    var currentGeoJSONLayer = null;
+    var geojsonCache = {};       // filename -> parsed GeoJSON (სესიის განმავლობაში)
+    var activeRequestId = 0;     // race-condition-ის დაცვა
+
+    var COLOR_STOPS = [
+        { min: 100, color: "#800026", label: "100+" },
+        { min: 50,  color: "#BD0026", label: "50 - 100" },
+        { min: 20,  color: "#E31A1C", label: "20 - 50" },
+        { min: 10,  color: "#FC4E2A", label: "10 - 20" },
+        { min: 5,   color: "#FD8D3C", label: "5 - 10" },
+        { min: 0,   color: "#FFEDA0", label: "0 - 5" }
+    ];
+
+    var networkSelect = document.getElementById("networkType");
+    var periodSelect = document.getElementById("periodSelect");
+    var statusEl = document.getElementById("status");
+
+    // --------------------------------------------------------------- //
+    // რუკის ინიციალიზაცია
+    // --------------------------------------------------------------- //
+    var map = L.map("map", { preferCanvas: true }).setView([42.0, 43.5], 7);
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; CARTO | Data &copy; Ookla",
+        maxZoom: 18
+    }).addTo(map);
+
+    renderLegend();
+
+    // --------------------------------------------------------------- //
+    // დამხმარე ფუნქციები
+    // --------------------------------------------------------------- //
+    function getColor(d) {
+        for (var i = 0; i < COLOR_STOPS.length; i++) {
+            if (d > COLOR_STOPS[i].min) return COLOR_STOPS[i].color;
+        }
+        return COLOR_STOPS[COLOR_STOPS.length - 1].color;
+    }
+
+    function renderLegend() {
+        var rows = document.getElementById("legendRows");
+        rows.innerHTML = COLOR_STOPS.map(function (stop) {
+            return (
+                '<div class="legend-row">' +
+                    '<span class="legend-swatch" style="background:' + stop.color + '"></span>' +
+                    "<span>" + stop.label + "</span>" +
+                "</div>"
+            );
+        }).join("");
+    }
+
+    function setStatus(message, type) {
+        statusEl.textContent = message || "";
+        statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function style(feature) {
+        return {
+            fillColor: getColor(feature.properties.avg_d_mbps),
+            weight: 0.5,
+            opacity: 1,
+            color: "#333",
+            fillOpacity: 0.75
+        };
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function (ch) {
+            return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
+        });
+    }
+
+    function onEachFeature(feature, layer) {
+        var p = feature.properties;
+        var popupContent =
+            '<div style="min-width: 180px;">' +
+                '<h3 class="popup-title">' + escapeHtml(p.year) + " | " + escapeHtml(p.quarter) + "</h3>" +
+                '<b style="color:#2ca25f;">⬇️ ჩამოტვირთვა:</b> ' + Number(p.avg_d_mbps).toFixed(1) + " Mbps<br>" +
+                '<b style="color:#6cb6ff;">⬆️ ატვირთვა:</b> ' + Number(p.avg_u_mbps).toFixed(1) + " Mbps<br>" +
+                '<b style="color:#ff8a8a;">⏱️ Ping:</b> ' + escapeHtml(p.avg_lat_ms) + " ms" +
+                '<hr style="border:0; border-top:1px solid #333; margin:10px 0;">' +
+                '<span class="popup-meta">' +
+                    "📱 უნიკალური მოწყობილობა: " + escapeHtml(p.devices) + "<br>" +
+                    "📊 ტესტების რაოდენობა: " + escapeHtml(p.tests) +
+                "</span>" +
+            "</div>";
+        layer.bindPopup(popupContent);
+    }
+
+    /** ფაილის სახელიდან წაკითხვადი ლეიბლის აწყობა: georgia_mobile_2023_Q4.geojson -> 2023 წლის Q4 */
+    function formatPeriodLabel(filename, network) {
+        var cleanName = filename
+            .replace("georgia_" + network + "_", "")
+            .replace(".geojson", "");
+        var parts = cleanName.split("_"); // ["2023", "Q4"]
+        if (parts.length === 2) {
+            return parts[0] + " წლის " + parts[1];
+        }
+        return cleanName;
+    }
+
+    // --------------------------------------------------------------- //
+    // 1. Metadata-ის ჩატვირთვა
+    // --------------------------------------------------------------- //
+    function loadMetadata() {
+        setStatus("მეტამონაცემები იტვირთება...", "loading");
+
+        fetch("data/metadata.json?t=" + Date.now())
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                metadata = data;
+                periodSelect.disabled = false;
+                setStatus("", null);
+                updatePeriodDropdown();
+            })
+            .catch(function (error) {
+                console.error("metadata.json ჩატვირთვის შეცდომა:", error);
+                setStatus("⚠️ მონაცემების სია ვერ ჩაიტვირთა. სცადეთ გვერდის განახლება.", "error");
+                periodSelect.innerHTML = '<option value="">მიუწვდომელია</option>';
+            });
+    }
+
+    // --------------------------------------------------------------- //
+    // 2. პერიოდის dropdown-ის შევსება (ქსელის ტიპის შენარჩუნებით)
+    // --------------------------------------------------------------- //
+    function updatePeriodDropdown(preferredValue) {
+        if (!metadata) return;
+
+        var network = networkSelect.value;
+        var files = metadata[network] || [];
+        var previousValue = preferredValue !== undefined ? preferredValue : periodSelect.value;
+
+        periodSelect.innerHTML = "";
+
+        if (files.length === 0) {
+            var emptyOption = document.createElement("option");
+            emptyOption.value = "";
+            emptyOption.textContent = "მონაცემები არაა";
+            periodSelect.appendChild(emptyOption);
+            periodSelect.disabled = true;
+            clearMap();
+            return;
+        }
+
+        periodSelect.disabled = false;
+        files.forEach(function (file) {
+            var option = document.createElement("option");
+            option.value = file;
+            option.textContent = formatPeriodLabel(file, network);
+            periodSelect.appendChild(option);
+        });
+
+        // ვცდილობთ იგივე კვარტლის შენარჩუნებას ახალ ქსელის ტიპზე გადართვისას
+        // (მაგ. "2023_Q4" ნაწილის დამთხვევით), წინააღმდეგ შემთხვევაში ვირჩევთ უახლესს.
+        var matched = null;
+        if (previousValue) {
+            var suffix = previousValue.replace(/^georgia_(mobile|fixed)_/, "");
+            matched = files.find(function (f) { return f.endsWith(suffix); });
+        }
+
+        periodSelect.value = matched || files[0];
+        loadMapData();
+    }
+
+    // --------------------------------------------------------------- //
+    // 3. GeoJSON-ის ჩატვირთვა და დახატვა
+    // --------------------------------------------------------------- //
+    function clearMap() {
+        if (currentGeoJSONLayer) {
+            map.removeLayer(currentGeoJSONLayer);
+            currentGeoJSONLayer = null;
+        }
+    }
+
+    function loadMapData() {
+        var selectedFile = periodSelect.value;
+        if (!selectedFile) return;
+
+        var requestId = ++activeRequestId;
+        setStatus("⏳ მონაცემები იტვირთება...", "loading");
+
+        var renderCached = function (data) {
+            // თუ ამასობაში მომხმარებელმა სხვა პერიოდი აირჩია, ამ პასუხს ვუგულებელყოფთ.
+            if (requestId !== activeRequestId) return;
+
+            clearMap();
+            currentGeoJSONLayer = L.geoJSON(data, {
+                style: style,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+
+            var bounds = currentGeoJSONLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [24, 24] });
+            }
+
+            setStatus("", null);
+        };
+
+        if (geojsonCache[selectedFile]) {
+            renderCached(geojsonCache[selectedFile]);
+            return;
+        }
+
+        fetch("data/" + selectedFile)
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                geojsonCache[selectedFile] = data;
+                renderCached(data);
+            })
+            .catch(function (error) {
+                if (requestId !== activeRequestId) return;
+                console.error("GeoJSON ჩატვირთვის შეცდომა:", error);
+                setStatus("⚠️ ამ პერიოდის მონაცემები ვერ ჩაიტვირთა.", "error");
+            });
+    }
+
+    // --------------------------------------------------------------- //
+    // Event listeners
+    // --------------------------------------------------------------- //
+    networkSelect.addEventListener("change", function () {
+        updatePeriodDropdown(periodSelect.value);
+    });
+    periodSelect.addEventListener("change", loadMapData);
+
+    loadMetadata();
+})();
+</script>
+
+</body>
+</html>

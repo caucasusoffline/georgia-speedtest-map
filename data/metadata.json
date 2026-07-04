@@ -13,6 +13,7 @@
     "georgia_mobile_2023_Q3.geojson",
     "georgia_mobile_2023_Q2.geojson",
     "georgia_mobile_2023_Q1.geojson",
+    "georgia_mobile_2022_Q2.geojson",
     "georgia_mobile_2022_Q1.geojson"
   ],
   "fixed": [
@@ -29,7 +30,8 @@
     "georgia_fixed_2023_Q3.geojson",
     "georgia_fixed_2023_Q2.geojson",
     "georgia_fixed_2023_Q1.geojson",
+    "georgia_fixed_2022_Q2.geojson",
     "georgia_fixed_2022_Q1.geojson"
   ],
-  "generated_at": "2026-07-04T21:07:03.064808Z"
+  "generated_at": "2026-07-04T21:19:16.556730Z"
 }

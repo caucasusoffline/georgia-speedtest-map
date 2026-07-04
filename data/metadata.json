@@ -1,9 +1,11 @@
 {
   "mobile": [
+    "georgia_mobile_2025_Q2.geojson",
     "georgia_mobile_2025_Q1.geojson"
   ],
   "fixed": [
+    "georgia_fixed_2025_Q2.geojson",
     "georgia_fixed_2025_Q1.geojson"
   ],
-  "generated_at": "2026-07-04T17:58:22.660203Z"
+  "generated_at": "2026-07-04T19:44:34.694540Z"
 }

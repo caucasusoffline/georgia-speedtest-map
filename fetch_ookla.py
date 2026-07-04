@@ -16,18 +16,18 @@ def get_latest_ookla_url(network_type="mobile"):
         (1, "-01-01")
     ]
     
-    # ვამოწმებთ ბოლო 5 წლის მონაცემებს
+    # ვამოწმებთ ბოლო რამდენიმე წლის მონაცემებს
     for year in range(current_year, current_year - 5, -1):
         for q_num, date_suffix in quarters:
             date_str = f"{year}{date_suffix}"
-            url = f"https://ookla-open-data.s3.amazonaws.com/shapefiles/performance/type={network_type}/year={year}/quarter={q_num}/{date_str}_performance_{network_type}_tiles.parquet"
+            # აქ შეიცვალა shapefiles -> parquet
+            url = f"https://ookla-open-data.s3.amazonaws.com/parquet/performance/type={network_type}/year={year}/quarter={q_num}/{date_str}_performance_{network_type}_tiles.parquet"
             
             try:
-                # HEAD-ის ნაცვლად ვიყენებთ GET-ს stream=True პარამეტრით
                 response = requests.get(url, stream=True, timeout=10)
                 if response.status_code == 200:
-                    print(f"✅ მოიძებნა უახლესი მონაცემები: {year} წლის კვარტალი {q_num}")
-                    response.close() # ვხურავთ კავშირს, რადგან შემოწმება გავიარეთ
+                    print(f"✅ მოიძებნა უახლესი მონაცემები: {year} წლის კვარტალი {q_num} ({network_type})")
+                    response.close()
                     return url
             except requests.RequestException:
                 continue

@@ -1,1 +1,79 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ookla - საქართველოს მობილური ინტერნეტის სიჩქარე</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        /* რუკამ რომ მთელი ეკრანი დაიკავოს */
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
 
+<!-- რუკის კონტეინერი -->
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // 1. რუკის ინიციალიზაცია (ცენტრი: საქართველო)
+    var map = L.map('map').setView([42.3154, 43.3569], 7);
+
+    // 2. ფონური რუკის (Base Map) დამატება OpenStreetMap-იდან
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors | Data: Ookla'
+    }).addTo(map);
+
+    // 3. ფერების ფუნქცია გადმოწერის სიჩქარის (Mbps) მიხედვით
+    function getColor(d) {
+        return d > 100 ? '#800026' : // 100 Mbps-ზე მეტი მუქი წითელია
+               d > 50  ? '#BD0026' :
+               d > 20  ? '#E31A1C' :
+               d > 10  ? '#FC4E2A' :
+               d > 5   ? '#FD8D3C' :
+                         '#FFEDA0';  // დაბალი სიჩქარე ყვითელია
+    }
+
+    // 4. გეომეტრიული ფიგურების (უჯრების) დიზაინი
+    function style(feature) {
+        return {
+            fillColor: getColor(feature.properties.avg_d_kbps),
+            weight: 1, // საზღვრის სისქე
+            opacity: 1,
+            color: 'white',
+            fillOpacity: 0.7
+        };
+    }
+
+    // 5. მონაცემების ჩატვირთვა და რუკაზე დამატება
+    fetch('data/georgia_mobile.geojson')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, {
+                style: style,
+                onEachFeature: function (feature, layer) {
+                    // Pop-up ფანჯარა თითოეულ უჯრაზე დაკლიკებისას
+                    var popupContent = `
+                        <div style="font-family: Arial;">
+                            <h4 style="margin:0 0 8px 0;">სიჩქარის მაჩვენებელი</h4>
+                            <b>ჩამოტვირთვა (Download):</b> ${feature.properties.avg_d_kbps.toFixed(2)} Mbps<br>
+                            <b>ატვირთვა (Upload):</b> ${feature.properties.avg_u_kbps.toFixed(2)} Mbps<br>
+                            <b>ტესტების რაოდენობა:</b> ${feature.properties.tests}
+                        </div>
+                    `;
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(map);
+        })
+        .catch(error => console.error('შეცდომა GeoJSON ფაილის ჩატვირთვისას:', error));
+</script>
+
+</body>
+</html>

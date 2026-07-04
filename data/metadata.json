@@ -1,6 +1,7 @@
 {
   "mobile": [
     "georgia_mobile_2026_Q1.geojson",
+    "georgia_mobile_2025_Q4.geojson",
     "georgia_mobile_2025_Q3.geojson",
     "georgia_mobile_2025_Q2.geojson",
     "georgia_mobile_2025_Q1.geojson",
@@ -10,6 +11,7 @@
   ],
   "fixed": [
     "georgia_fixed_2026_Q1.geojson",
+    "georgia_fixed_2025_Q4.geojson",
     "georgia_fixed_2025_Q3.geojson",
     "georgia_fixed_2025_Q2.geojson",
     "georgia_fixed_2025_Q1.geojson",
@@ -17,5 +19,5 @@
     "georgia_fixed_2024_Q3.geojson",
     "georgia_fixed_2024_Q2.geojson"
   ],
-  "generated_at": "2026-07-04T20:42:37.421523Z"
+  "generated_at": "2026-07-04T20:47:13.197272Z"
 }

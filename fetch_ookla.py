@@ -12,8 +12,28 @@ MIN_LON, MIN_LAT, MAX_LON, MAX_LAT = 40.0, 41.0, 46.8, 43.6
 GEORGIA_BND_URL = "https://caucasusoffline.com/test1000/js/municipality-shapes-converted.geojson"
 
 def get_georgia_polygon():
-    print("ვტვირთავთ საქართველოს საზღვრებს...")
-    gdf_boundary = gpd.read_file(GEORGIA_BND_URL)
+    print("ვტვირთავთ საქართველოს საზღვრებს (ბრაუზერის სიმულაციით)...")
+    # სერვერის ბლოკირების (403 Forbidden) ასარიდებლად ვამატებთ User-Agent-ს
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    # 1. ფაილს ვიწერთ requests-ით, როგორც ჩვეულებრივი მომხმარებელი
+    response = requests.get(GEORGIA_BND_URL, headers=headers)
+    response.raise_for_status() # შეცდომის შემოწმება
+    
+    # 2. ვინახავთ დროებით ლოკალურ ფაილად
+    temp_file = "data/temp_boundary.geojson"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        f.write(response.text)
+        
+    # 3. GeoPandas კითხულობს ლოკალური ფაილიდან უპრობლემოდ
+    gdf_boundary = gpd.read_file(temp_file)
+    
+    # 4. ვშლით დროებით ფაილს, რომ რეპოზიტორიუმში ზედმეტი არ აიტვირთოს
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
+        
     return gdf_boundary.dissolve()
 
 def get_target_urls(network_type, target_year=None, target_quarter=None):
@@ -21,12 +41,10 @@ def get_target_urls(network_type, target_year=None, target_quarter=None):
     current_year = datetime.now().year
     quarters_map = {1: "-01-01", 2: "-04-01", 3: "-07-01", 4: "-10-01"}
     
-    # ლოგიკა: თუ მითითებულია წელი და კვარტალი, ვტვირთავთ მხოლოდ მას
     if target_year and target_quarter:
         years = [target_year]
         quarters = [target_quarter]
     else:
-        # ავტომატური რეჟიმი: ვამოწმებთ მხოლოდ ბოლო 2 წელს (დროის დასაზოგად)
         years = range(current_year, current_year - 2, -1)
         quarters = [4, 3, 2, 1]
 

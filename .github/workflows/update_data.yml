@@ -1,15 +1,22 @@
 name: Update Ookla Data
+
 on:
   schedule:
-    - cron: '0 0 1 */3 *' # გაეშვება ყოველ 3 თვეში ერთხელ
-  workflow_dispatch: # ხელით გაშვების ღილაკიც რომ გქონდეს
+    - cron: '0 0 1 */3 *' 
+  workflow_dispatch: 
+
+# ეს ნაწილი აუცილებელია, რომ სკრიპტმა შეძლოს მონაცემების შენახვა (push)
+permissions:
+  contents: write 
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      # აქ განვაახლეთ ვერსიები v4 და v5-ზე
+      - uses: actions/checkout@v4 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 
         with:
           python-version: '3.10'
       - name: Install dependencies

@@ -3,27 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ookla - საქართველოს ინტერნეტის სიჩქარე</title>
+    <title>Ookla - ინტერნეტის სიჩქარის ევოლუცია</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
         #map { width: 100vw; height: 100vh; }
-        /* რუკის გადამრთველის დიზაინის ოდნავ გადიდება */
-        .leaflet-control-layers { font-family: Arial, sans-serif; font-size: 15px; padding: 10px; }
+        /* მენიუს დიზაინი, რომელიც რუკაზე იტივტივებს */
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        select, button {
+            padding: 8px;
+            margin-top: 5px;
+            width: 100%;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
 
+<!-- მენიუ: ქსელის და დროის ასარჩევად -->
+<div class="controls">
+    <h3 style="margin: 0 0 10px 0; font-size: 16px;">მონაცემების ფილტრი</h3>
+    
+    <label for="networkType"><b>ქსელის ტიპი:</b></label>
+    <select id="networkType" onchange="updatePeriodDropdown()">
+        <option value="mobile">📱 მობილური ინტერნეტი</option>
+        <option value="fixed">🏠 ფიქსირებული (სახლის)</option>
+    </select>
+
+    <br><br>
+    
+    <label for="periodSelect"><b>აირჩიეთ პერიოდი:</b></label>
+    <select id="periodSelect" onchange="loadMapData()"></select>
+    
+    <br><br>
+    <div id="loading" style="display: none; color: #E31A1C; font-weight: bold;">⏳ მონაცემები იტვირთება...</div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
     var map = L.map('map').setView([42.0, 43.5], 7);
+    var currentGeoJSONLayer = null;
+    var metadata = {};
 
-    // მუქი რუკის ფონი (მონაცემების ფერები უკეთ ჩანს)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> | Data &copy; Ookla'
+        attribution: '&copy; CARTO | Data &copy; Ookla'
     }).addTo(map);
 
     function getColor(d) {
@@ -37,10 +72,7 @@
     function style(feature) {
         return {
             fillColor: getColor(feature.properties.avg_d_mbps),
-            weight: 0.5,
-            opacity: 1,
-            color: '#333', 
-            fillOpacity: 0.75
+            weight: 0.5, opacity: 1, color: '#333', fillOpacity: 0.75
         };
     }
 
@@ -48,7 +80,7 @@
         var p = feature.properties;
         var popupContent = `
             <div style="font-family: Arial; min-width: 180px;">
-                <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">სიჩქარის დეტალები</h3>
+                <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">${p.year} | ${p.quarter}</h3>
                 <b style="color: #2ca25f;">⬇️ ჩამოტვირთვა:</b> ${p.avg_d_mbps.toFixed(1)} Mbps<br>
                 <b style="color: #2b8cbe;">⬆️ ატვირთვა:</b> ${p.avg_u_mbps.toFixed(1)} Mbps<br>
                 <b style="color: #de2d26;">⏱️ Ping:</b> ${p.avg_lat_ms} ms<br>
@@ -62,32 +94,68 @@
         layer.bindPopup(popupContent);
     }
 
-    // ვქმნით ცარიელ შრეებს (Layers) მობილურისა და ფიქსირებულისთვის
-    var mobileLayer = L.layerGroup();
-    var fixedLayer = L.layerGroup();
-
-    // მობილური მონაცემების ჩატვირთვა
-    fetch('data/georgia_mobile.geojson')
+    // 1. ვტვირთავთ მეტამონაცემებს (რა ფაილები გვაქვს)
+    fetch('data/metadata.json')
         .then(response => response.json())
         .then(data => {
-            L.geoJSON(data, { style: style, onEachFeature: onEachFeature }).addTo(mobileLayer);
-            mobileLayer.addTo(map); // რუკის ჩატვირთვისას მობილური ავტომატურად ჩართული იქნება
+            metadata = data;
+            updatePeriodDropdown(); // ვავსებთ Dropdown-ს
         });
 
-    // ფიქსირებული მონაცემების ჩატვირთვა
-    fetch('data/georgia_fixed.geojson')
-        .then(response => response.json())
-        .then(data => {
-            L.geoJSON(data, { style: style, onEachFeature: onEachFeature }).addTo(fixedLayer);
+    // 2. Dropdown მენიუს შევსება
+    function updatePeriodDropdown() {
+        var network = document.getElementById("networkType").value;
+        var periodSelect = document.getElementById("periodSelect");
+        periodSelect.innerHTML = ""; // ვასუფთავებთ
+        
+        var files = metadata[network];
+        
+        if (!files || files.length === 0) {
+            periodSelect.innerHTML = "<option>მონაცემები არაა</option>";
+            return;
+        }
+
+        files.forEach(file => {
+            // სახელის გალამაზება (მაგ: georgia_mobile_2023_Q4.geojson -> 2023 წლის Q4)
+            var cleanName = file.replace("georgia_" + network + "_", "").replace(".geojson", "");
+            var option = document.createElement("option");
+            option.value = file;
+            option.text = cleanName.replace("_", " წლის ");
+            periodSelect.appendChild(option);
         });
 
-    // მარჯვენა ზედა კუთხეში გადამრთველი მენიუს შექმნა
-    var overlayMaps = {
-        "📱 მობილური ინტერნეტი": mobileLayer,
-        "🏠 ფიქსირებული (სახლის)": fixedLayer
-    };
+        // ავტომატურად ვტვირთავთ პირველ (უახლეს) მონაცემს
+        loadMapData();
+    }
 
-    L.control.layers(null, overlayMaps, {collapsed: false}).addTo(map);
+    // 3. მონაცემების რუკაზე დახატვა
+    function loadMapData() {
+        var selectedFile = document.getElementById("periodSelect").value;
+        if (!selectedFile || selectedFile === "მონაცემები არაა") return;
+
+        document.getElementById("loading").style.display = "block";
+
+        // თუ რუკაზე წინა მონაცემები ხატია, ვშლით
+        if (currentGeoJSONLayer) {
+            map.removeLayer(currentGeoJSONLayer);
+        }
+
+        // ვტვირთავთ ახალ ფაილს
+        fetch('data/' + selectedFile)
+            .then(response => response.json())
+            .then(data => {
+                currentGeoJSONLayer = L.geoJSON(data, {
+                    style: style,
+                    onEachFeature: onEachFeature
+                }).addTo(map);
+                
+                document.getElementById("loading").style.display = "none";
+            })
+            .catch(error => {
+                console.error("შეცდომა ფაილის ჩატვირთვისას", error);
+                document.getElementById("loading").style.display = "none";
+            });
+    }
 </script>
 
 </body>

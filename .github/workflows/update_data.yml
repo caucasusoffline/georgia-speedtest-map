@@ -27,7 +27,8 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install geopandas pyarrow requests
+        # აქ დაემატა fiona
+        run: pip install geopandas pyarrow requests fiona
       - name: Run script
         run: |
           if [ -n "${{ github.event.inputs.year }}" ] && [ -n "${{ github.event.inputs.quarter }}" ]; then

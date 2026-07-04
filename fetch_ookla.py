@@ -10,19 +10,23 @@ from datetime import datetime
 os.makedirs("data", exist_ok=True)
 MIN_LON, MIN_LAT, MAX_LON, MAX_LAT = 40.0, 41.0, 46.8, 43.6
 
-# ახლა უკვე ლოკალურ ფაილს ვიყენებთ
-LOCAL_BND_FILE = "municipality.geojson"
+LOCAL_BND_FILE = "municipality-shapes-converted.geojson"
 
 def get_georgia_polygon():
     print("ვტვირთავთ საქართველოს საზღვრებს (ლოკალური ფაილიდან)...")
     if not os.path.exists(LOCAL_BND_FILE):
         raise FileNotFoundError(f"ვერ ვიპოვე ფაილი: {LOCAL_BND_FILE}. გთხოვთ, ატვირთოთ რეპოზიტორიუმში.")
         
-    # engine="fiona" ავტომატურად უმკლავდება "ღია კონტურების" (unclosed ring) პრობლემას
     gdf_boundary = gpd.read_file(LOCAL_BND_FILE, engine="fiona")
     
-    # make_valid() ასწორებს გეომეტრიულ დეფექტებს (მაგ. გადაჯვარედინებულ ხაზებს)
+    # გეომეტრიის გასწორება
     gdf_boundary['geometry'] = gdf_boundary['geometry'].make_valid()
+    
+    # ყველაზე მთავარი ხაზი CRS-ის გასასწორებლად!
+    # ვაიძულებთ, რომ შენი ფაილის კოორდინატები ზუსტად Ookla-სას დაემთხვეს
+    if gdf_boundary.crs != "EPSG:4326":
+        print("ვასწორებთ ფაილის კოორდინატთა სისტემას (CRS)...")
+        gdf_boundary = gdf_boundary.to_crs("EPSG:4326")
     
     return gdf_boundary.dissolve()
 
@@ -77,12 +81,14 @@ def process_network(network_type, georgia_boundary, target_year=None, target_qua
             df['lon'] = coords[0].astype(float)
             df['lat'] = coords[1].astype(float)
             
+            # პირველადი ამოჭრა კვადრატით
             georgia_df = df[
                 (df['lon'] >= MIN_LON) & (df['lon'] <= MAX_LON) &
                 (df['lat'] >= MIN_LAT) & (df['lat'] <= MAX_LAT)
             ].copy()
             
             if len(georgia_df) > 0:
+                print(f"  კვადრატში მოხვდა {len(georgia_df)} უჯრა.")
                 georgia_df['geometry'] = georgia_df['tile'].apply(wkt.loads)
                 gdf = gpd.GeoDataFrame(georgia_df, geometry='geometry', crs="EPSG:4326")
                 
@@ -90,6 +96,7 @@ def process_network(network_type, georgia_boundary, target_year=None, target_qua
                 gdf_clipped = gpd.clip(gdf, georgia_boundary)
                 
                 if len(gdf_clipped) == 0:
+                     print(f"  ⚠️ საზღვრებში გადაკვეთა არ მოხდა (შესაძლოა CRS-ის პრობლემა).")
                      continue
 
                 gdf_clipped['avg_d_mbps'] = gdf_clipped['avg_d_kbps'] / 1000 
@@ -101,9 +108,9 @@ def process_network(network_type, georgia_boundary, target_year=None, target_qua
                 gdf_clipped = gdf_clipped[cols]
                 
                 gdf_clipped.to_file(output_file, driver="GeoJSON")
-                print(f"✅ შეინახა: {output_file}")
+                print(f"✅ შეინახა: {output_file} ({len(gdf_clipped)} ლოკაცია)")
             else:
-                print(f"⚠️ {year} Q{q_num} ცარიელია.")
+                print(f"⚠️ {year} Q{q_num} ცარიელია კვადრატში.")
         except Exception as e:
             print(f"❌ შეცდომა: {e}")
 
@@ -122,7 +129,6 @@ def main():
     parser.add_argument("--quarter", type=int, help="კვარტალი")
     args = parser.parse_args()
 
-    # ლოკალური ფაილის წაკითხვა
     georgia_boundary = get_georgia_polygon()
     
     process_network("mobile", georgia_boundary, args.year, args.quarter)

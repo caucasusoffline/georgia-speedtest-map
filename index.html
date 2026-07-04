@@ -3,76 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ookla - საქართველოს მობილური ინტერნეტის სიჩქარე</title>
-    
-    <!-- Leaflet CSS -->
+    <title>Ookla - საქართველოს ინტერნეტის სიჩქარე</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
-        /* რუკამ რომ მთელი ეკრანი დაიკავოს */
         body { margin: 0; padding: 0; }
         #map { width: 100vw; height: 100vh; }
+        /* რუკის გადამრთველის დიზაინის ოდნავ გადიდება */
+        .leaflet-control-layers { font-family: Arial, sans-serif; font-size: 15px; padding: 10px; }
     </style>
 </head>
 <body>
 
-<!-- რუკის კონტეინერი -->
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-    // 1. რუკის ინიციალიზაცია (ცენტრი: საქართველო)
-    var map = L.map('map').setView([42.3154, 43.3569], 7);
+    var map = L.map('map').setView([42.0, 43.5], 7);
 
-    // 2. ფონური რუკის (Base Map) დამატება OpenStreetMap-იდან
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors | Data: Ookla'
+    // მუქი რუკის ფონი (მონაცემების ფერები უკეთ ჩანს)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a> | Data &copy; Ookla'
     }).addTo(map);
 
-    // 3. ფერების ფუნქცია გადმოწერის სიჩქარის (Mbps) მიხედვით
     function getColor(d) {
-        return d > 100 ? '#800026' : // 100 Mbps-ზე მეტი მუქი წითელია
+        return d > 100 ? '#800026' : 
                d > 50  ? '#BD0026' :
                d > 20  ? '#E31A1C' :
                d > 10  ? '#FC4E2A' :
-               d > 5   ? '#FD8D3C' :
-                         '#FFEDA0';  // დაბალი სიჩქარე ყვითელია
+               d > 5   ? '#FD8D3C' : '#FFEDA0';
     }
 
-    // 4. გეომეტრიული ფიგურების (უჯრების) დიზაინი
     function style(feature) {
         return {
-            fillColor: getColor(feature.properties.avg_d_kbps),
-            weight: 1, // საზღვრის სისქე
+            fillColor: getColor(feature.properties.avg_d_mbps),
+            weight: 0.5,
             opacity: 1,
-            color: 'white',
-            fillOpacity: 0.7
+            color: '#333', 
+            fillOpacity: 0.75
         };
     }
 
-    // 5. მონაცემების ჩატვირთვა და რუკაზე დამატება
+    function onEachFeature(feature, layer) {
+        var p = feature.properties;
+        var popupContent = `
+            <div style="font-family: Arial; min-width: 180px;">
+                <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">სიჩქარის დეტალები</h3>
+                <b style="color: #2ca25f;">⬇️ ჩამოტვირთვა:</b> ${p.avg_d_mbps.toFixed(1)} Mbps<br>
+                <b style="color: #2b8cbe;">⬆️ ატვირთვა:</b> ${p.avg_u_mbps.toFixed(1)} Mbps<br>
+                <b style="color: #de2d26;">⏱️ Ping:</b> ${p.avg_lat_ms} ms<br>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+                <span style="font-size: 13px; color: #555;">
+                    <b>📱 უნიკალური მოწყობილობა:</b> ${p.devices}<br>
+                    <b>📊 ტესტების რაოდენობა:</b> ${p.tests}
+                </span>
+            </div>
+        `;
+        layer.bindPopup(popupContent);
+    }
+
+    // ვქმნით ცარიელ შრეებს (Layers) მობილურისა და ფიქსირებულისთვის
+    var mobileLayer = L.layerGroup();
+    var fixedLayer = L.layerGroup();
+
+    // მობილური მონაცემების ჩატვირთვა
     fetch('data/georgia_mobile.geojson')
         .then(response => response.json())
         .then(data => {
-            L.geoJSON(data, {
-                style: style,
-                onEachFeature: function (feature, layer) {
-                    // Pop-up ფანჯარა თითოეულ უჯრაზე დაკლიკებისას
-                    var popupContent = `
-                        <div style="font-family: Arial;">
-                            <h4 style="margin:0 0 8px 0;">სიჩქარის მაჩვენებელი</h4>
-                            <b>ჩამოტვირთვა (Download):</b> ${feature.properties.avg_d_kbps.toFixed(2)} Mbps<br>
-                            <b>ატვირთვა (Upload):</b> ${feature.properties.avg_u_kbps.toFixed(2)} Mbps<br>
-                            <b>ტესტების რაოდენობა:</b> ${feature.properties.tests}
-                        </div>
-                    `;
-                    layer.bindPopup(popupContent);
-                }
-            }).addTo(map);
-        })
-        .catch(error => console.error('შეცდომა GeoJSON ფაილის ჩატვირთვისას:', error));
+            L.geoJSON(data, { style: style, onEachFeature: onEachFeature }).addTo(mobileLayer);
+            mobileLayer.addTo(map); // რუკის ჩატვირთვისას მობილური ავტომატურად ჩართული იქნება
+        });
+
+    // ფიქსირებული მონაცემების ჩატვირთვა
+    fetch('data/georgia_fixed.geojson')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, { style: style, onEachFeature: onEachFeature }).addTo(fixedLayer);
+        });
+
+    // მარჯვენა ზედა კუთხეში გადამრთველი მენიუს შექმნა
+    var overlayMaps = {
+        "📱 მობილური ინტერნეტი": mobileLayer,
+        "🏠 ფიქსირებული (სახლის)": fixedLayer
+    };
+
+    L.control.layers(null, overlayMaps, {collapsed: false}).addTo(map);
 </script>
 
 </body>
